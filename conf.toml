@@ -1,0 +1,14 @@
+redis_addrs = ["hello", "world"]
+pattern = "%s"
+
+[util]
+log_dir = "./log"
+log_level = "info"
+
+[server]
+listenPort = 6700
+
+
+[cluster]
+clusterAddrs = [["1"]]
+clusterPasswords = ["1"]
