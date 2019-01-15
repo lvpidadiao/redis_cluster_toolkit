@@ -1,37 +1,38 @@
 use toml::*;
+use serde_derive::*;
 use std::fs::*;
 use std::io::{Read};
 
 #[derive(Deserialize)]
 struct ServerSt{
-    listenPort: i32,
-    UploadUrl: String,
+    listen_port: i32,
+    upload_url: String,
     needpassword: bool
 }
 
 #[derive(Deserialize)]
 struct OptionSt{
-    whitelist : Vec<String>,
-    deleteswitch: Option<bool>,
-    saveDeleteKeys : Option<bool>,
-    idleTimeBound: Option<i64>,
-    keyDirName: Option<String>,
-    maxDeleteCount: Option<i32>,
-    memoryStat: Option<bool>
+    whitelist : Option<Vec<String>>,
+    delete_switch: Option<bool>,
+    save_delete_keys: Option<bool>,
+    idle_time_bound: Option<i64>,
+    key_dir_name: Option<String>,
+    max_delete_count: Option<i32>,
+    memory_stat: Option<bool>
 }
 
 #[derive(Deserialize)]
 struct ClusterSt {
-    connTimeout : Option<i32>,
-    readTimeout : Option<i32>,
-    writeTimeout: Option<i32>,
-    clusterAddrs: Vec<Vec<String>>,
-    clusterPasswords: Vec<String>
+    conn_timeout: Option<i32>,
+    read_timeout: Option<i32>,
+    write_timeout: Option<i32>,
+    cluster_addrs: Vec<Vec<String>>,
+    cluster_passwords: Vec<String>
 }
 
 
 #[derive(Deserialize)]
-struct UtilSt{
+pub struct UtilSt{
     log_dir : Option<String>,
     log_name :Option<String>,
     log_level : String,
@@ -65,22 +66,40 @@ pub struct ToolConfigSt {
 
 pub trait Config{
     type T;
-    fn New(path: &str) -> Result<Self::T, de::Error> ;
+    fn New(path: &str) -> Result<Self::T, String> ;
 }
 
 impl Config for ConfigSt {
     type T = ConfigSt;
-    fn New(path: &str) -> Result<Self::T, de::Error> {
-        let cFile = File::open(path);
-
-        let mut readed = String::new();
-        println!("hello there");
-        cFile.unwrap().read_to_string(& mut readed);
-        println!("{}", readed);
-        let mut k: Self::T = toml::from_str(&mut readed).unwrap();
+    fn New(path: &str) -> Result<Self::T, String> {
+        File::open(path)
+            .map_err(|err| err.to_string())
+            .and_then(|mut file| {
+                let mut contents  = String::new();
+                file.read_to_string(&mut contents)
+                    .map_err(
+                        |err| err.to_string()
+                    )
+                    .map(|_| contents)
+            })
+            .and_then(|contents| {
+                toml::from_str(&contents)
+                    .map_err(|err| err.to_string())
+                    .and_then( |mut cf:  ConfigSt| {
+                        cf.replace_none_value();
+                        Ok(cf)
+                    })
+            })
+//        let cFile = File::open(path);
+//
+//        let mut readed = String::new();
+//        println!("hello there");
+//        cFile.unwrap().read_to_string(& mut readed);
+//        println!("{}", readed);
+//        let mut k: Self::T = toml::from_str(&mut readed).unwrap();
 //        self.replace_none_value(k);
-        k.replace_none_value();
-        return Ok(k);
+//        k.replace_none_value();
+//        return Ok(k);
     }
 }
 
@@ -92,7 +111,8 @@ impl ConfigSt{
     }
 
     pub fn get_log_dir(self) -> String {
-        String::from(self.util.log_dir.unwrap())
+//        self.util.log_level.clone()
+        self.util.log_dir.unwrap().clone()
 //        self.util.log_dir.unwrap()
     }
 
@@ -109,22 +129,35 @@ impl ConfigSt{
 impl Config for ToolConfigSt {
     type T = ToolConfigSt;
 
-    fn New(path : &str) -> Result<Self::T, de::Error> {
-        let cFile = File::open(path);
-
-        let readed = &mut String::new();
-        println!("hello there");
-        cFile.unwrap().read_to_string(readed);
-        println!("{}", readed);
-        let k: Self::T = toml::from_str(readed).unwrap();
-        return Ok(k);
-
+    fn New(path : &str) -> Result<Self::T, String> {
+        File::open(path)
+            .map_err(|err| err.to_string())
+            .and_then(|mut file| {
+                let mut contents  = String::new();
+                file.read_to_string(&mut contents)
+                    .map_err(
+                        |err| err.to_string()
+                    )
+                    .map(|_| contents)
+            })
+            .and_then(|contents| {
+                toml::from_str(&contents)
+                    .map_err(|err| err.to_string())
+            })
     }
 }
 
 impl ToolConfigSt {
     pub fn get_log_dir(self) -> String {
         String::from(self.util.log_dir.unwrap())
+    }
+
+    pub fn get_first_redis_addr(&self) -> &String {
+        &self.cluster.cluster_addrs[0][0]
+    }
+
+    pub fn get_first_redis_password(&self) -> &String {
+        &self.cluster.cluster_passwords[0]
     }
 }
 
