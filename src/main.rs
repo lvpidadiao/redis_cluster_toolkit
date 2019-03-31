@@ -2,8 +2,9 @@
 //extern crate serde_derive;
 //extern crate toml;
 
-extern crate tokio;
+#[macro_use]
 extern crate futures;
+extern crate tokio;
 extern crate redis;
 use crate::conf::conf_reader::Config;
 
@@ -12,13 +13,13 @@ mod genrand;
 mod conf;
 mod analysis;
 mod redisconn;
+mod cmdgen;
 
 use tokio::io;
 use tokio::net::TcpStream;
 use futures::Future;
 
 fn main() {
-
     let c = conf::conf_reader::ToolConfigSt::New("./conf.toml");
     match c {
         Err(e) => {
@@ -29,10 +30,8 @@ fn main() {
             let mut c = redisconn::ConnectionPool::new(p.get_first_redis_addr(), p.get_first_redis_password()).unwrap();
 //            let conn = c.get_connection().unwrap();
 //            let rst:redis::RedisResult<String> = redis::cmd("get").arg("hello").query(&conn);
-            let mut rst: redis::RedisResult<String> = Ok(String::from("ok"));
-            c.get("get","hello", &mut rst);
+            c.iterate::<String>("scan", 0);
 
-            println!("result is {}", rst.unwrap());
             println!("{}", p.get_log_dir())
         }
     }

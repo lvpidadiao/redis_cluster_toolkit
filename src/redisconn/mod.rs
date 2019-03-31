@@ -7,6 +7,11 @@ use redis::Client as reCli;
 use redis::Connection;
 use redis::*;
 use url::Url;
+
+
+use futures::{Future, Async, Poll};
+
+
 //use redis::{ConnectionInfo, ConnectionAddr};
 pub struct ConnectionPool {
     conn_pool : Vec<Box<Connection>>,
@@ -15,9 +20,10 @@ pub struct ConnectionPool {
     check_out: usize,
 }
 
+const DSIZE :usize = 1;
+
 impl ConnectionPool {
     pub fn new(addr: &str, password: &String) -> Option<ConnectionPool> {
-        const DSIZE :usize = 5;
         let mut redis_addr = String::from("redis://");
 
 //        password.and_then(|p| {
@@ -61,11 +67,36 @@ impl ConnectionPool {
         }
     }
 
-    #[inline]
-    pub fn get<T:FromRedisValue>(&mut self, cmd:&str, key:&str, result: &mut RedisResult<T>){
+    pub fn docmd<T:FromRedisValue>(&mut self, cmd:&str, key:&str) -> RedisResult<T>{
         let conn = self.get_conn();
-        *result = redis::cmd(cmd).arg(key).query(&*conn);
-        self.give_back(conn)
+        let result = redis::cmd(cmd).arg(key).query(&*conn);
+        self.give_back(conn);
+        return result;
+    }
+
+    pub fn iterate<T>(&mut self, cmd:& str, cursor:u64)
+        where T: FromRedisValue + ToRedisArgs
+    {
+        let conn = self.get_conn();
+        let result:RedisResult<Iter<T>> = redis::cmd(cmd).cursor_arg(cursor).arg("COUNT").arg("10").iter(&*conn);
+        let mut p = pipe();
+        for it in match(result) {
+            Ok(t) => t,
+            Err(_) => {
+                self.give_back(conn);
+                return ()},
+        } {
+            p.cmd("type").arg(it);
+//            println!("value is {}", it);
+        }
+
+        let v : RedisResult<Vec<String>> = p.query(&*conn);
+
+        for ve in v.unwrap() {
+            println!("type is {}", ve);
+        }
+
+        self.give_back(conn);
     }
 
     fn get_conn(&mut self) -> Box<Connection> {
@@ -83,6 +114,8 @@ impl ConnectionPool {
         }
     }
 }
+
+
 
 pub fn init_single_redis(addr: &String, password: &String) -> reCli{
     let mut redis_addr = String::from("redis://");
